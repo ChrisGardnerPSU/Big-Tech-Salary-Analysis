@@ -1,0 +1,361 @@
+---
+title: "US IT Salaries Report"
+author: "Christian Gardner"
+date: "Due: Tuesday December 14th, 2021"
+output: html_notebook
+---
+
+### United States IT Big Tech Salary Analysis
+
+The purpose of this report is to analysis and report on salaries for IT employees working for Big Tech companies. The main data set used is from Kaggle and represents 52,875 Information Technology employees in the United States. The main questions I seek to answer are... 
+
+- What is the highest paying Job in the IT sector in the United States?
+
+- What are the highest paying (and lowest paying) Big Tech companies to work for in the United States?
+
+To complete the analysis, we will also be comparing this to IT jobs in Europe to see if there is any relation between the highest paying jobs in both locations. 
+
+### Loading Required Packages
+
+```{r}
+library(tidyverse)
+library(mosaic)
+library(scales)
+```
+
+
+### Data
+
+First we will load in both of the original data sets.
+
+```{r}
+US_Salary <- read.csv("Levels_Fyi_Salary_Data.csv")
+eu_salary <- read.csv("IT_EU_SALARY_2020.csv")
+```
+
+
+### Examining Data
+
+To see how the data was collected, let's look at the first 5 observations in both to get a better understanding.
+
+```{r}
+US_Salary %>%
+  head(5)
+```
+
+```{r}
+eu_salary %>%
+  head(5)
+```
+
+For the purposes of this project, we will not be using all of the variables in both data sets. Instead we will be using the following variables.
+
+1. US Salary Data
+  + Company - (character) What company the employee works for
+  + Title - (character) The job title of the employee
+  + Totalyearlycompensation- (character) Total yearly compensation include base salary, stock, and bonuses
+  + Location (character) - city and state
+  + yearsofexperience - (double)
+  + yearsatcompany (double)
+  
+2. EU Salary Data
+  + Position (chr)
+  + Yearly.brutto.salary..without.bonus.and.stocks..in.EUR (dbl)
+  + Yearly.bonus...stocks.in.EUR (chr)
+
+Note: The last two variable names in the EU data set will be changed to be more concise and accurate. 
+
+### Select the Important Variables and Rename
+
+```{r}
+US_Salary <-
+  US_Salary %>%
+    select(company, title, totalyearlycompensation, location, yearsofexperience, yearsatcompany)
+
+eu_salary <-
+  eu_salary %>%
+    select(Position, Yearly.brutto.salary..without.bonus.and.stocks..in.EUR, Yearly.bonus...stocks.in.EUR)
+
+eu_salary <-
+  eu_salary %>%
+  rename(salary = Yearly.brutto.salary..without.bonus.and.stocks..in.EUR, bonus_stock = Yearly.bonus...stocks.in.EUR)
+```
+
+Bonus Stock in the EU dataset must be made into a numeric variable
+```{r}
+eu_salary <-
+  eu_salary %>%
+  mutate(bonus_stock = as.numeric(bonus_stock))
+```
+
+For more in depth initial data examination see Gardner_IT__Salary_Initial_EDA.Rmd document attached in repo
+
+## Addressing Research Questions
+
+### 1. Which Big Tech Jobs Pay the Most?
+
+To begin addressing the research questions, I first want to see what job titles pay the most on average in the United States. To complete this, we must use the US salaries data, group by title, and summarise the average yearly salary for each job. 
+
+```{r}
+highest_us_sal <-
+  US_Salary %>%
+  group_by(title) %>%
+  summarise(avg_compensation = mean(totalyearlycompensation)) %>%
+  arrange(desc(avg_compensation)) #To display in descending order 
+highest_us_sal
+```
+
+To see this more clearly, let's make a graphic that displays these 15 jobs. 
+
+```{r}
+  ggplot(data=highest_us_sal, aes(x=reorder(title, -avg_compensation),y=avg_compensation)) +
+  geom_col(fill="orange", decreasing = TRUE) +
+  scale_y_continuous() +
+  xlab("Job Title") +
+  ylab("Salary in US $")+
+  scale_y_continuous(labels = comma) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    coord_flip() +
+    ggtitle("Top 15 US Big Tech IT Jobs")
+```
+
+Here you can see that many of the average salaries in IT for big tech companies is around $200,000, with Software Engineering Manager coming in at the highest with over $350,000 on average. Let's examine if this trend is consistent with Europe as well. 
+
+Before this can be done, we need to create a new variable that displays the **Total** compensation for the EU positions, as it currently only shows their base salary and bonus stock in separate columns. 
+
+```{r}
+eu_salary <-
+  eu_salary %>%
+  mutate(compensation = salary + bonus_stock)
+highest_eu_sal <-
+  eu_salary %>%
+  group_by(Position) %>%
+  summarise(avg_compensation = mean(compensation)) %>%
+  arrange(desc(avg_compensation)) %>%
+  head(15)
+```
+
+Now we can continue with making the graphic.
+
+```{r}
+  ggplot(data=highest_eu_sal, aes(x=reorder(Position, -avg_compensation),y=avg_compensation)) +
+  geom_col(fill="blue", decreasing = TRUE) +
+  scale_y_continuous() +
+  xlab("Job Title") +
+  ylab("Salary in EU $")+
+  scale_y_continuous(labels = comma) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    coord_flip() +
+  ggtitle("Top 15 EU IT Jobs")
+```
+
+In the EU dataset, there is more of a significant difference between wages. However, this can be attributed to the nature of how the data was recorded. In some cases in the EU dataset, there was only one person recording a certain title, so the wage for that job could be inflated (i.e Freelance AI Lead / advisor)
+
+However, we do see that in both data sets, manager positions overwhelmingly pay more on average than other positions. Another interesting note is that on both top 15 lists, engineers and architects appear multiple times.
+
+To answer the research question more clearly, it seems that the best jobs in Big Tech include Engineers, Architects, and surprising to me; sales. Overall, if you can eventually get into a management position you will be compensated higher on average. 
+
+### 2. Which Big Tech Company Pays the Highest (and Lowest) Wages?
+
+To address the second research question, we will be looking at which companies reported the highest average wages in this data set. To achieve this goal we will be looking at the US Salaries data, grouping by company, and reporting the top 15 average wages.
+
+First, we must make a new data frame that displays this analysis.
+
+```{r}
+best_avg_comp_company <-
+  US_Salary %>%
+  group_by(company) %>%
+  summarise(avg_compensation = mean(totalyearlycompensation)) %>%
+  arrange(desc(avg_compensation)) %>%
+  head(15)
+  
+best_avg_comp_company
+```
+
+To show these findings in a clearer way, we will create a graphic.
+
+```{r}
+  ggplot(data=best_avg_comp_company, aes(x=reorder(company, -avg_compensation),y=avg_compensation)) +
+  geom_col(fill="red", decreasing = TRUE) +
+  scale_y_continuous(labels = comma) +
+  xlab("Company") +
+  ylab("Avg. Salary in US $")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    coord_flip() +
+    ggtitle("Top 15 Highest Paying Tech Companies")
+```
+
+The findings based on this analysis are interesting. Some of the companies shown in this graphic, I had never heard of. Since the highest reported average wages were for Coupa Software, I wanted to see how many observations were included of people working at this company. 
+
+```{r}
+US_Salary %>%
+  filter(company == "Coupa software")
+```
+
+As we can see, there is only 1 reported salary for this company of which the person reported earning almost $1.5 million dollars per year as a product manager in New York City. There is no telling whether or not this is the actual salary of this person or if they made a mistake in their response.
+
+From the companies I recognize, Doordash is the highest paying company in the US. However, Zillow, Snapchat, Uber, Netflix, Airbnb, and stubhub all pay a similar average salary of around $500,000.
+
+To further analyze this question, I wanted to look at the average salary paid by some of the biggest companies in the US based on different positions. 
+
+To do this, I chose these companies:
+
+  + Apple
+  
+  + Microsoft
+  
+  + Netflix
+  
+  + Facebook
+  
+  + Google
+  
+  + Amazon
+  
+  + Uber
+  
+  + DoorDash
+  
+  + Adobe
+
+As well as these positions:
+
+  + Hardware Engineer
+  
+  + Software Engineer
+  
+  + Recruiter
+  
+  + Marketing
+  
+  + Data Scientist
+  
+```{r}
+by_company_title <-
+  US_Tech_Sals %>%
+  group_by(company,title) %>%
+  summarize(mean_salary = mean(totalyearlycompensation)) %>%
+  filter(title == "Hardware Engineer" | title =="Software Engineer" | title =="Recruiter" | title =="Marketing" | title =="Data Scientist")
+by_company_title
+```
+
+Here is our new data frame that can now be used to plot this as a faceted graph to give us more concise information.
+
+```{r}
+by_company_title %>%
+  ggplot( aes(x=reorder(company,-mean_salary), y=mean_salary)) +
+  geom_col(color = "green") +
+  facet_wrap(~title) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+    coord_flip() +
+  scale_y_continuous(labels = comma) +
+  xlab("Company") +
+  ylab("Average Salaries")
+```
+Based on this analysis, Netflix is overwhelmingly the highest paying company out of these companies and these titles. Surprisingly, Microsoft pays the least out of all of these companies and positions. However, between most of the companies displayed, the average salaries by position are fairly even. 
+
+To further break down this data, I wanted to make a wider table to display the numbers and include an average salary for each position within these companies. To achieve this, we must first pivot the original data frame into a wider format, then create a new column that calculates the average wages by position. Finally, I joined these together to create one data frame that included all of this information.
+
+```{r}
+SalariesWide <-
+  US_Tech_Sals %>%
+  group_by(company, title) %>%
+  summarise(mean_salary = mean(totalyearlycompensation)) %>%
+  pivot_wider(names_from = company, values_from = mean_salary)
+
+Avg_Salary_Companies <-
+  US_Tech_Sals %>%
+  group_by(title) %>%
+  summarise(avg_salary = mean(totalyearlycompensation))
+
+Average_Salaries <-
+  SalariesWide %>%
+  left_join(Avg_Salary_Companies, by = c("title" = "title"))
+
+Average_Salaries
+```
+
+### Additional Analysis
+
+To finish off the analysis, there are a couple of additional questions that came up. 
+
+1. What states pay the highest and lowest big tech wages?
+
+2. Could a model to be fit to estimate the wages of someone given a few different characteristics?
+
+### Which States pay the highest/lowest wages?
+
+Since the US Salaries data set has location recorded as "city, state abbreviation", I need to use a regular expression to pull out the state abbreviation into its own column.
+
+```{r}
+US_Salary <- 
+US_Salary %>%
+  mutate(State = str_extract(string = location, pattern = "(?<!\\w)(?:,\\s+)?(?:A[LKZR]|C[AOT]|DE|FL|GA|HI|I[ADLN]|K[SY]|LA|M[EDAINSOT]|N[EVHJMYCD]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AT]|W[AIVY]),?\\s?(?!\\w)")) %>%
+  filter( !is.na(State))
+```
+
+Now that there is a column with each state abbreviation, we will group by each state and calculate the average salary by state. To display this in the most clear way, we will use a choropleth map.
+
+```{r}
+state_compensation <-
+  US_Salary %>%
+  group_by(State) %>%
+  summarise(avg_state_compensation = mean(totalyearlycompensation)) %>%
+  arrange(desc(avg_state_compensation))
+
+mUSMap(state_compensation, key="State", fill = "avg_state_compensation")
+```
+
+Based on the plot, we can see that the highest wages are in California, Washington, New York, Hawaii, and Massachusetts. Many of the lowest paying IT positions are located in the midwest. 
+
+### Build a Model That Predicts Wages
+
+Finally, I would like to see if we can fit a model that is able to predict total yearly compensation based on company, years of experience, and years at current company. To limit the number of factors we will not use the state variable and only consider the same companies that we used to analyze which companies pay the most. 
+
+```{r}
+reg_no_state <-
+  lm(data = US_Tech_Sals, formula = totalyearlycompensation ~ company + yearsofexperience + yearsatcompany)
+summary(reg_no_state)
+```
+
+Here, Amazon is technically not a significant factor, however since it is included in the categorical company variable we will choose to leave it in the model. However, according to the adjusted R-squared value, only 36 percent of the variation in wages can be explained by this model. 
+
+Regardless, let's predict the wages of someone who works at DoorDash with 6 years of overall experience and 3 years at DoorDash. 
+
+### Predicting Based on These Factors
+
+```{r}
+predict(reg_no_state, data.frame(company = "DoorDash",yearsofexperience = 6, yearsatcompany = 3))
+```
+
+Based on our model, we predict that someone fitting this description would be making around $318,000 per year in total compensation. 
+
+## Results
+
+We can now fully answer both the original research questions and the questions that came up during the analysis.
+
+1. Which Big Tech Jobs Pay the Most?
+
+Looking at only the United States, the highest paying Big Tech Jobs are management positions. As far as mid-level positions, the highest paying roles are engineers, architects (data, solutions, etc.), and sales. When compared to Europe, many of the same trends follow. 
+
+2. Which Big Tech Companies Pay the Most (and the Least)?
+
+Overall, the average salary is the highest for DoorDash (when only looking at well known companies). However, when only looking at select companies and roles, Netflix pays the most on average across the board. In constrast, when looking at these select roles, Microsoft pays the least on average.
+
+**Additional Questions:**
+
+1. Which States Have the Highest (and Lowest) Big Tech Salaries?
+
+When looking at the choropleth map, the highest paying states on average for Big Tech companies are California, New York, Washington, Hawaii, and Massechussets. While the lowest paying states are mainly located in the Midwest.
+
+2. Can a Model be Fit to Predict Salaries Based on a Few Different Factors?
+
+Since the model only accounts for around 36% of the variation in salary, we can not conclude that our model is able to predict salaries based on the given factors. 
+
+The findings from this analysis could be used for potential job seekers for where they should live, what roles they could seek out, and which companies they should choose to apply to. 
+
+### References
+
+Pandey, Parul. “It Salary Survey for EU Region(2018-2020).” Kaggle, 19 Jan. 2021, https://www.kaggle.com/parulpandey/2020-it-salary-survey-for-eu-region. 
+
+Ogozaly, Jack. “Data Science and STEM Salaries.” Kaggle, 10 Oct. 2021, https://www.kaggle.com/jackogozaly/data-science-and-stem-salaries. 
